@@ -12,7 +12,6 @@ class: EECS 662
 -- Imports for Monads
 
 import Control.Monad
-import Test.HUnit
 import Data.Maybe
 
 -- CFAE AST and Type Definitions
@@ -46,12 +45,6 @@ evalDynCFAE e (Id i) = lookup i e
 evalDynCFAE e (If0 c t1 t2) = do { (Num c') <- (evalDynCFAE e c);
                                     if (c' == 0) then (evalDynCFAE e t1) else (evalDynCFAE e t2)}
 
-evalDynCFAETests =
-  TestList [ "evalDynCFAE (Num 1) = 1" ~: fromJust (evalDynCFAE [] (Num 1)) ~?= (Num 1)
-           , "evalDynCFAE (Plus(Num 1)(Num 1)) = 2" ~: fromJust (evalDynCFAE [] (Plus(Num 1)(Num 1)))  ~?= (Num 2)
-           , "evalDynCFAE (Minus(Num 1)(Num 1)) = 0" ~: fromJust (evalDynCFAE [] (Minus(Num 1)(Num 1))) ~?= (Num 0)
-           , "evalDynCFAE (App (Lambda x in x + x) 1)) = 2" ~: fromJust (evalDynCFAE [] (App (Lambda "x" (Plus x x )) (Num 1))) ~?= (Num 2)
-           ]
 
 data CFAEValue where
   NumV :: Int -> CFAEValue
@@ -97,6 +90,7 @@ elabCFBAE :: CFBAE -> CFAE
 elabCFBAE (Num' x) = (Num x) -- this is called a catamorphism
 elabCFBAE (Plus' l r) =(Plus (elabCFBAE l)(elabCFBAE r))
 elabCFBAE (Minus' l r) =(Minus (elabCFBAE l)(elabCFBAE r))
+elabCFBAE (Lambda' i b) = ( Lambda i (elabCFBAE b))
 elabCFBAE (App' f a) = (App (elabCFBAE f)(elabCFBAE a))
 elabCFBAE (Bind' i v b) = (App (Lambda i (elabCFBAE b)) (elabCFBAE v))
 elabCFBAE (Id' i) = (Id i)
@@ -112,7 +106,35 @@ evalCFBAE e x = evalStatCFAE e (elabCFBAE x)
 
 --last prob elaborator and other thing 
 
+-- Test Cases
 
-allTests = TestList [evalDynCFAETests]
+-- Note that these can be loaded separately using p3-test.hs if you do not
+-- want to copy/paste into your project solution.
 
-check = runTestTT allTests
+-- Tests for evalDynCFAE and evalDynCFAE.  test2 and test3 should demonstrate
+-- the difference between static and dynamic scoping.  If you get the same
+-- results with both interpreters, you've got problems.
+
+test0=(App (Lambda "inc" (Id "inc")) (Lambda "x" (Plus (Id "x") (Num 1))))
+test1=(App (Lambda "inc" (App (Id "inc") (Num 3))) (Lambda "x" (Plus (Id "x") (Num 1))))
+test2=(App (Lambda "n" (App (Lambda "inc" (App (Lambda "n" (App (Id "inc") (Num 3))) (Num 3))) (Lambda "x" (Plus (Id "x") (Id "n"))))) (Num 1))
+test3=(App (Lambda "Sum" (App (Id "Sum") (Num 3))) (Lambda "x" (If0 (Id "x") (Num 0) (Plus (Id "x") (App (Id "Sum") (Minus (Id "x") (Num 1)))))))
+
+-- List of tests if you would like to use map for testing
+
+testsStat = map (evalStatCFAE []) [test0,test1,test2,test3]
+
+testsDyn = map (evalDynCFAE []) [test0,test1,test2,test3]
+
+-- Tests for evalCFBAE and evalDynCFAE.  These are the same tests as above
+-- using Bind.  You should get the same results from evalCFBAE that you
+-- get from evalStateCFAE.
+
+test0'= (Bind' "inc" (Lambda' "x" (Plus' (Id' "x") (Num' 1))) (Id' "inc"))
+test1' = (Bind' "inc" (Lambda' "x" (Plus' (Id' "x") (Num' 1))) (App' (Id' "inc") (Num' 3)))
+test2' = (Bind' "n" (Num' 1) (Bind' "inc" (Lambda' "x" (Plus' (Id' "x") (Id' "n"))) (Bind' "n" (Num' 3) (App' (Id' "inc") (Num' 3)))))
+test3' = (Bind' "Sum" (Lambda' "x" (If0' (Id' "x") (Num' 0) (Plus' (Id' "x") (App' (Id' "Sum") (Minus' (Id' "x") (Num' 1)))))) (App' (Id' "Sum") (Num' 3)))
+
+-- List of tests if you would like to use map for testing
+
+tests' = map elabCFBAE [test0',test1',test2',test3']
